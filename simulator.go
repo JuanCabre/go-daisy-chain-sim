@@ -50,13 +50,21 @@ func Produce() chan Parameters {
 	out := make(chan Parameters)
 	runs := uint32(1000)
 
-	allSymbols := []uint32{8, 16, 32, 64, 128, 256, 512}
+	allSymbols := []uint32{8, 32, 64, 128}
 	allSymbolSizes := []uint32{8}
 	allFieldSizes := []string{"Binary8"}
-	allRelaysCounts := []int{1, 2, 4, 8, 16}
+	allRelaysCounts := []int{1, 3, 5, 7}
 	allRecLocs := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
-	allEpsilons := []float64{0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7}
+	allEpsilons := []float64{0.1, 0.2, 0.3, 0.4, 0.5}
 
+	var totalRuns uint64
+	testCount := uint64(0)
+	totalRuns = uint64(len(allSymbols)) *
+		uint64(len(allSymbolSizes)) *
+		uint64(len(allFieldSizes)) *
+		uint64(len(allRelaysCounts)) *
+		uint64(len(allRecLocs)) *
+		uint64(len(allEpsilons))
 	go func() {
 		for _, symbols := range allSymbols {
 			for _, symbolSize := range allSymbolSizes {
@@ -64,8 +72,12 @@ func Produce() chan Parameters {
 					for _, relaysCount := range allRelaysCounts {
 						for _, recLoc := range allRecLocs {
 							for _, epsilon := range allEpsilons {
+								testCount += 1
+								progress := float64(testCount) / float64(totalRuns)
+								fmt.Println("Progress: ", progress, "%")
+
 								// Do not run a simmulation without recoder
-								if recLoc > relaysCount {
+								if recLoc >= relaysCount {
 									continue
 								}
 								r := Parameters{symbols: symbols,
@@ -141,6 +153,7 @@ func Work(in chan Parameters) chan Result {
 				encoder.SetConstSymbols(&dataIn[0], symbols*SymbolSize)
 
 				for i := uint32(0); i < runs; i++ {
+					err := false
 					decoder := DecoderFactory.Build()
 					recoder := DecoderFactory.Build()
 
@@ -192,14 +205,18 @@ func Work(in chan Parameters) chan Result {
 						if v != dataOut[i] {
 							fmt.Println("Unexpected failure to decode")
 							fmt.Println("Please file a bug report :)")
-							panic("Error decoding")
+							// panic("Error decoding")
+							err = true
+							break
 						}
 					}
 
-					r.run = i
-					r.tx = Tx
+					if !err {
+						r.run = i
+						r.tx = Tx
 
-					out <- r
+						out <- r
+					}
 
 					kodo.DeleteDecoder(decoder)
 					kodo.DeleteDecoder(recoder)
@@ -214,7 +231,7 @@ func Work(in chan Parameters) chan Result {
 
 // Consume will store in a file the results arriving from the channel r
 func Consume(in <-chan Result) {
-	f, err := os.Create(time.Now().Format("2006-01-02_15:04") + "_simm.json")
+	f, err := os.Create(time.Now().Format("2006-01-02_15:04") + "_simm.csv")
 	if err != nil {
 		log.Fatal(err)
 	}
