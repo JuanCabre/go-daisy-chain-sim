@@ -259,29 +259,3 @@ func Consume(in <-chan Result) {
 	}
 	w.Flush()
 }
-
-func merge(cs ...<-chan Result) <-chan Result {
-	var wg sync.WaitGroup
-	out := make(chan Result)
-
-	// Start an output goroutine for each input channel in cs.  output
-	// copies values from c to out until c is closed, then calls wg.Done.
-	output := func(c <-chan Result) {
-		for n := range c {
-			out <- n
-		}
-		wg.Done()
-	}
-	wg.Add(len(cs))
-	for _, c := range cs {
-		go output(c)
-	}
-
-	// Start a goroutine to close out once all the output goroutines are
-	// done.  This must start after the wg.Add call.
-	go func() {
-		wg.Wait()
-		close(out)
-	}()
-	return out
-}
