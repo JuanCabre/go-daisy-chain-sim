@@ -13,6 +13,18 @@ import (
 )
 
 func main() {
+
+	// f, err := os.Create("out.trace")
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	// err = trace.Start(f)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+	// defer trace.Stop()
+
 	// Seed random number generator to produce different results every time
 	rand.Seed(time.Now().UTC().UnixNano())
 
@@ -56,19 +68,19 @@ type Result struct {
 func Produce() chan Parameters {
 	runs := uint32(5000)
 
-	allSymbols := []uint32{8, 32, 64, 128, 256, 512}
-	allSymbolSizes := []uint32{8}
-	allFieldSizes := []string{"Binary8"}
-	allRelaysCounts := []int{1, 3, 5, 7, 9, 11, 13, 15}
-	allRecLocs := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
-	allEpsilons := []float64{0.1, 0.2, 0.3, 0.4, 0.5}
-
-	// allSymbols := []uint32{8, 32, 64, 128}
+	// allSymbols := []uint32{8, 32, 64, 128, 256, 512}
 	// allSymbolSizes := []uint32{8}
 	// allFieldSizes := []string{"Binary8"}
-	// allRelaysCounts := []int{1, 3}
-	// allRecLocs := []int{0, 1, 2}
-	// allEpsilons := []float64{0, 0.1, 0.2}
+	// allRelaysCounts := []int{1, 3, 5, 7, 9, 11, 13, 15}
+	// allRecLocs := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16}
+	// allEpsilons := []float64{0.1, 0.2, 0.3, 0.4, 0.5}
+
+	allSymbols := []uint32{8, 32}
+	allSymbolSizes := []uint32{8}
+	allFieldSizes := []string{"Binary8"}
+	allRelaysCounts := []int{1, 3}
+	allRecLocs := []int{0, 1}
+	allEpsilons := []float64{0.1}
 
 	var totalRuns uint64
 	testCount := uint64(0)
@@ -178,10 +190,11 @@ func Work(in chan Parameters, out chan Result, wg *sync.WaitGroup) {
 			recoder.SetMutableSymbols(&dataRec[0], recoder.BlockSize())
 
 			Tx := uint64(0)
+			Rx := uint32(0)
 
-			for !decoder.IsComplete() {
+			for Rx < symbols || !decoder.IsComplete() {
 				// Encode the packet into the payload buffer...
-				encoder.WritePayload(&payload[0])
+				// encoder.WritePayload(&payload[0])
 				Tx++
 				// ...chek if we drop the packet of the encoder...
 				prevTx := rand.Float64() > epsilon
@@ -191,10 +204,10 @@ func Work(in chan Parameters, out chan Result, wg *sync.WaitGroup) {
 					if rel == recPos {
 						// ...feed the payload if the prevTx succeeded...
 						if prevTx {
+							encoder.WritePayload(&payload[0])
 							recoder.ReadPayload(&payload[0])
 						}
 						// ...and write the recoded payload no matter what the prevTx was
-						recoder.WritePayload(&recPayload[0])
 						// Inject the packet to the network
 						prevTx = rand.Float64() > epsilon
 					} else {
@@ -206,7 +219,9 @@ func Work(in chan Parameters, out chan Result, wg *sync.WaitGroup) {
 				}
 				if prevTx {
 					// ...pass that packet to the decoder...
+					recoder.WritePayload(&recPayload[0])
 					decoder.ReadPayload(&recPayload[0])
+					Rx++
 				}
 			}
 
